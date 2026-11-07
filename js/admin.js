@@ -6,7 +6,6 @@ const $ = id => document.getElementById(id);
 let sectors = [];
 let materials = [];
 let inquiries = [];
-
 let adminAuthorized = false;
 
 // ==================================================
@@ -19,36 +18,54 @@ function alertAdmin(message, isError = false) {
   if (element) {
     element.textContent = message;
     element.style.color = isError ? "#b42318" : "#16845d";
-  } else {
-    console.log(message);
   }
+
+  console.log(message);
 }
 
 // ==================================================
-// 2. VÉRIFICATION DE L'ACCÈS ADMINISTRATEUR
+// 2. PROTECTION DE L'ADMINISTRATION
 // ==================================================
 
 async function requireAdmin() {
   try {
     const { data, error } = await supabase.auth.getSession();
 
-    if (error || !data?.session) {
+    if (error) {
+      console.error("Erreur de session :", error);
+      alertAdmin("Impossible de vérifier la connexion.", true);
+      return false;
+    }
+
+    if (!data.session) {
       window.location.replace("auth.html");
       return false;
     }
 
-    const session = data.session;
+    const user = data.session.user;
+
+    console.log("Utilisateur connecté :", user.id);
 
     const { data: profile, error: profileError } = await supabase
       .from("profile")
       .select("id, full_name, role")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .maybeSingle();
 
-    if (profileError || !profile) {
+    if (profileError) {
       console.error("Erreur profil :", profileError);
-      alertAdmin("Impossible de vérifier votre profil.", true);
-      window.location.replace("index.html");
+      alertAdmin(
+        "Erreur de vérification du profil : " + profileError.message,
+        true
+      );
+      return false;
+    }
+
+    if (!profile) {
+      alertAdmin(
+        "Aucun profil associé à ce compte. Contactez l'administrateur.",
+        true
+      );
       return false;
     }
 
@@ -56,9 +73,10 @@ async function requireAdmin() {
       .trim()
       .toLowerCase();
 
+    console.log("Rôle détecté :", role);
+
     if (!["admin", "staff"].includes(role)) {
-      alertAdmin("Accès réservé aux administrateurs.", true);
-      window.location.replace("index.html");
+      alertAdmin("Accès refusé : rôle non autorisé.", true);
       return false;
     }
 
@@ -66,15 +84,16 @@ async function requireAdmin() {
 
     if (userElement) {
       userElement.textContent =
-        `${profile.full_name || session.user.email} · ${role}`;
+        `${profile.full_name || user.email} · ${role}`;
     }
 
     adminAuthorized = true;
+
     return true;
 
   } catch (error) {
     console.error("Erreur de sécurité :", error);
-    window.location.replace("auth.html");
+    alertAdmin("Une erreur est survenue pendant la vérification.", true);
     return false;
   }
 }
@@ -113,56 +132,40 @@ async function loadAll() {
 
   alertAdmin("Chargement des données...");
 
-  const [sectorResult, materialResult, inquiryResult] =
-    await Promise.all([
-      supabase
-        .from("sectors")
-        .select("*")
-        .order("id", { ascending: true }),
+  const [sectorResult, materialResult] = await Promise.all([
+    supabase
+      .from("sectors")
+      .select("*")
+      .order("id", { ascending: true }),
 
-      supabase
-        .from("materials")
-        .select("*")
-        .order("name", { ascending: true }),
-
-      supabase
-        .from("demandes_contact")
-        .select("*")
-        .order("cree_a", { ascending: false })
-        .limit(100)
-    ]);
+    supabase
+      .from("materials")
+      .select("*")
+      .order("name", { ascending: true })
+  ]);
 
   if (sectorResult.error) {
     console.error("Erreur secteurs :", sectorResult.error);
-    alertAdmin("Erreur de chargement des secteurs.", true);
+    alertAdmin("Impossible de charger les secteurs.", true);
     return;
   }
 
   if (materialResult.error) {
     console.error("Erreur matériaux :", materialResult.error);
-    alertAdmin("Erreur de chargement des matériaux.", true);
+    alertAdmin("Impossible de charger les matériaux.", true);
     return;
-  }
-
-  if (inquiryResult.error) {
-    console.error("Erreur demandes :", inquiryResult.error);
-    inquiries = [];
-    console.error(
-      "Vérifie la table demandes_contact et ses colonnes."
-    );
-  } else {
-    inquiries = inquiryResult.data || [];
   }
 
   sectors = (sectorResult.data || []).map(sectorFromDb);
   materials = (materialResult.data || []).map(materialFromDb);
 
   renderAll();
-  alertAdmin("Données chargées.");
+
+  alertAdmin("Administration chargée avec succès.");
 }
 
 // ==================================================
-// 5. AFFICHAGE DES STATISTIQUES
+// 5. STATISTIQUES
 // ==================================================
 
 function renderStats() {
@@ -184,7 +187,7 @@ function renderStats() {
 }
 
 // ==================================================
-// 6. AFFICHAGE DES SECTEURS
+// 6. SECTEURS
 // ==================================================
 
 function renderSectors() {
@@ -195,10 +198,7 @@ function renderSectors() {
     <div class="admin-item">
       <h3>${escapeHtml(sector.name)}</h3>
       <p>${escapeHtml(sector.description)}</p>
-      <button type="button"
-        data-edit-sector="${escapeHtml(sector.id)}">
-        Modifier
-      </button>
+
       <button type="button"
         data-delete-sector="${escapeHtml(sector.id)}">
         Supprimer
@@ -208,7 +208,7 @@ function renderSectors() {
 }
 
 // ==================================================
-// 7. AFFICHAGE DES MATÉRIAUX
+// 7. MATÉRIAUX
 // ==================================================
 
 function renderMaterials() {
@@ -220,14 +220,11 @@ function renderMaterials() {
       <h3>${escapeHtml(material.name)}</h3>
       <p>${escapeHtml(material.descriptions)}</p>
       <p>${escapeHtml(material.uses)}</p>
+
       <p>
-        Disponibilité :
         ${material.available ? "Disponible" : "Indisponible"}
       </p>
-      <button type="button"
-        data-edit-material="${escapeHtml(material.id)}">
-        Modifier
-      </button>
+
       <button type="button"
         data-delete-material="${escapeHtml(material.id)}">
         Supprimer
@@ -237,42 +234,25 @@ function renderMaterials() {
 }
 
 // ==================================================
-// 8. AFFICHAGE DES DEMANDES
-// ==================================================
-
-function renderInquiries() {
-  const container = $("inquiries-list");
-  if (!container) return;
-
-  container.innerHTML = inquiries.map(inquiry => `
-    <div class="admin-item">
-      <h3>${escapeHtml(inquiry.nom || "")}</h3>
-      <p>${escapeHtml(inquiry.email || "")}</p>
-      <p>${escapeHtml(inquiry.message || "")}</p>
-      <p>${escapeHtml(inquiry.cree_a || "")}</p>
-    </div>
-  `).join("");
-}
-
-// ==================================================
-// 9. AFFICHAGE GLOBAL
+// 8. AFFICHAGE GLOBAL
 // ==================================================
 
 function renderAll() {
   renderStats();
   renderSectors();
   renderMaterials();
-  renderInquiries();
 }
 
 // ==================================================
-// 10. SUPPRESSION D'UN SECTEUR
+// 9. SUPPRESSION SECTEUR
 // ==================================================
 
 async function deleteSector(id) {
   if (!adminAuthorized) return;
 
-  if (!confirm("Supprimer ce secteur ?")) return;
+  if (!confirm("Voulez-vous vraiment supprimer ce secteur ?")) {
+    return;
+  }
 
   const { error } = await supabase
     .from("sectors")
@@ -289,13 +269,15 @@ async function deleteSector(id) {
 }
 
 // ==================================================
-// 11. SUPPRESSION D'UN MATÉRIAU
+// 10. SUPPRESSION MATÉRIAU
 // ==================================================
 
 async function deleteMaterial(id) {
   if (!adminAuthorized) return;
 
-  if (!confirm("Supprimer ce matériau ?")) return;
+  if (!confirm("Voulez-vous vraiment supprimer ce matériau ?")) {
+    return;
+  }
 
   const { error } = await supabase
     .from("materials")
@@ -312,44 +294,39 @@ async function deleteMaterial(id) {
 }
 
 // ==================================================
-// 12. DÉCONNEXION
+// 11. DÉCONNEXION
 // ==================================================
 
 async function logout() {
   const { error } = await supabase.auth.signOut();
 
   if (error) {
-    alertAdmin("Erreur de déconnexion.", true);
+    alertAdmin("Erreur pendant la déconnexion.", true);
     return;
   }
 
+  adminAuthorized = false;
   window.location.replace("auth.html");
 }
 
 // ==================================================
-// 13. ÉVÉNEMENTS
+// 12. ÉVÉNEMENTS
 // ==================================================
 
 document.addEventListener("click", async event => {
   if (!adminAuthorized) return;
 
-  const deleteSectorButton =
-    event.target.closest("[data-delete-sector]");
+  const sectorButton = event.target.closest("[data-delete-sector]");
 
-  if (deleteSectorButton) {
-    await deleteSector(
-      deleteSectorButton.dataset.deleteSector
-    );
+  if (sectorButton) {
+    await deleteSector(sectorButton.dataset.deleteSector);
     return;
   }
 
-  const deleteMaterialButton =
-    event.target.closest("[data-delete-material]");
+  const materialButton = event.target.closest("[data-delete-material]");
 
-  if (deleteMaterialButton) {
-    await deleteMaterial(
-      deleteMaterialButton.dataset.deleteMaterial
-    );
+  if (materialButton) {
+    await deleteMaterial(materialButton.dataset.deleteMaterial);
     return;
   }
 
@@ -359,13 +336,17 @@ document.addEventListener("click", async event => {
 });
 
 // ==================================================
-// 14. DÉMARRAGE SÉCURISÉ
+// 13. DÉMARRAGE
 // ==================================================
 
 async function startAdmin() {
   const authorized = await requireAdmin();
 
-  if (!authorized) return;
+  if (!authorized) {
+    // L'administration reste inutilisable.
+    document.body.style.visibility = "hidden";
+    return;
+  }
 
   await loadAll();
 }
