@@ -19,22 +19,23 @@ let materials = [];
 
 function normalizeSector(row) {
   return {
-    id: row.identifiant,
-    name: row.nom || "",
+    id: row.id,
+    name: row.name || "",
     description: row.description || "",
-    image_url: row["URL de l'image"] || "",
-    is_active: row.visible !== false
+    image_url: row.image_url || "",
+    is_active: row.is_active !== false
   };
 }
+
 function normalizeMaterial(row) {
   return {
-    id: row.identifiant,
-    name: row.nom || "",
+    id: row.id,
+    name: row.name || "",
     description: row.descriptions || "",
-    uses: row.utilise || "",
-    image_url: row["URL de l'image"] || "",
-    available: row.disponible !== false,
-    sector_id: row.secteur_id
+    uses: row.uses || "",
+    image_url: row.image_url || "",
+    available: row.available !== false,
+    sector_id: row.sector_id
   };
 }
 function sectorImage(sector) {
@@ -87,18 +88,27 @@ function renderMaterials() {
 }
 async function loadCatalog() {
   const [sectorResult, materialResult] = await Promise.all([
-    supabase.from("secteurs").select("*").order("identifiant"),
-    supabase.from("matériels").select("*").order("nom")
+    supabase.from("sectors").select("*").order("id"),
+    supabase.from("materials").select("*").order("name")
   ]);
-  if (sectorResult.error) console.error("Chargement secteurs:", sectorResult.error);
-  if (materialResult.error) console.error("Chargement catalogue:", materialResult.error);
+
+  if (sectorResult.error) console.error(sectorResult.error);
+  if (materialResult.error) console.error(materialResult.error);
+
   sectors = (sectorResult.data || []).map(normalizeSector);
   materials = (materialResult.data || []).map(normalizeMaterial);
+
   if (sectorResult.error || materialResult.error) {
-    $("material-grid").innerHTML = `<p class="empty-state">Le catalogue ne peut pas être chargé pour le moment. Vérifiez les autorisations Supabase (RLS).</p>`;
+    $("material-grid").innerHTML =
+      `<p>Impossible de charger le catalogue.</p>`;
   }
-  $("sector-filter").innerHTML = `<option value="">Tous les secteurs</option>` +
-    sectors.filter(s => s.is_active !== false).map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join("");
+
+  $("sector-filter").innerHTML =
+    `<option value="">Tous les secteurs</option>` +
+    sectors.filter(s => s.is_active).map(s =>
+      `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`
+    ).join("");
+
   renderSectors();
   renderMaterials();
 }
