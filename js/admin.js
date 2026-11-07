@@ -141,6 +141,10 @@ async function loadAll() {
   sectors = (sectorResult.data || []).map(sectorFromDb);
   materials = (materialResult.data || []).map(materialFromDb);
 
+  console.log("Secteurs reçus de Supabase :", sectorResult.data);
+  console.log("Secteurs après conversion :", sectors);
+  console.log("Nombre de secteurs :", sectors.length);
+  
   renderSectorOptions();
 
   await loadInquiries();
