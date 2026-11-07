@@ -339,12 +339,15 @@ document.addEventListener("click", async event => {
 // 13. DÉMARRAGE
 // ==================================================
 
+
 async function startAdmin() {
   const authorized = await requireAdmin();
 
   if (!authorized) {
-    // L'administration reste inutilisable.
-    document.body.style.visibility = "hidden";
+    alertAdmin(
+      "Accès impossible. Vérifie ta connexion et ton profil.",
+      true
+    );
     return;
   }
 
@@ -352,3 +355,4 @@ async function startAdmin() {
 }
 
 startAdmin();
+
