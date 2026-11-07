@@ -95,6 +95,27 @@ function materialFromDb(row) {
   };
 }
 
+function renderSectorOptions() {
+  const select = $("material-sector");
+
+  if (!select) return;
+
+  const selectedValue = select.value;
+
+  select.innerHTML = '<option value="">Choisir un secteur</option>';
+
+  sectors.forEach(sector => {
+    const option = document.createElement("option");
+    option.value = sector.id;
+    option.textContent = sector.name;
+    select.appendChild(option);
+  });
+
+  if (sectors.some(sector => String(sector.id) === selectedValue)) {
+    select.value = selectedValue;
+  }
+}
+
 // ==================================================
 // 4. CHARGEMENT DES DONNÉES
 // ==================================================
@@ -119,6 +140,8 @@ async function loadAll() {
 
   sectors = (sectorResult.data || []).map(sectorFromDb);
   materials = (materialResult.data || []).map(materialFromDb);
+
+  renderSectorOptions();
 
   await loadInquiries();
   renderAll();
